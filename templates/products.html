@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block main%}
+
+
+
+<div class="box-products">
+
+
+    <script type="text/javascript">
+        function simple_action(target) {
+            window.location = target
+        }
+    </script>
+    {% if is_admin %}
+        <button type="button" onclick=simple_action("{{ url_for('add_product') }}")>ADMIN ADD PRODUCT</button>
+    {% endif %}
+
+<form action="{{ url_for('ordered') }}" method="post">
+    <table>
+        <tr>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Price</th>
+            <th>Available</th>
+            <th>Quantity</th>
+        </tr>
+        {% for product in products %}
+            <tr>
+                <td>{{ product.code }}</td>
+                <td>{{ product.type }}</td>
+                <td>{{ product.description }}</td>
+                <td>{{ product.price }}</td>
+                <td>{{ product.available }}</td>
+                <td><input type="number" id="quantity_{{ product.code }}" name="quantity_{{ product.code }}" value="0" min="0" max="100"></td>
+            </tr>
+        {% endfor %}
+    </table>
+    <button type="submit" class="btn-1">Order</button>
+</form>
+
+</div>
+
+{% endblock %}

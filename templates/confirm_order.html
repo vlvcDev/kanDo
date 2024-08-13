@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block main%}
+
+
+<div class="box-products">
+    <h2>Thank You For Ordering!</h2>
+    Order Contents:
+    <table>
+        <tr>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Price</th>
+            <th>Quantity</th>
+            <th>Total</th>
+        </tr>
+        {% for item in items %}
+            <tr>
+                <td>{{ item.product.code }}</td>
+                <td>{{ item.product.type }}</td>
+                <td>{{ item.product.description }}</td>
+                <td>{{ item.product.price }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.product.price * item.quantity }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <form action="{{ url_for('orders') }}" method="get">
+        <button type="submit" class="btn-1">Orders</button>
+    </form>
+</div>
+
+{% endblock %}

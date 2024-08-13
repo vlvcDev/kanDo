@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block main %}
+    <div class="container">
+        <div class="box">
+            <h1>Add Product</h1>
+            <form action="" method="POST" novalidate>
+                {{ form.hidden_tag() }}
+                <p>{{ form.code.label }} <br> {{ form.code(size=30) }}</p>
+                <p>{{ form.type.label }} <br> {{ form.type(size=2) }}</p>
+                <p>{{ form.price.label }} <br> {{ form.price(size=30) }}</p>
+                <p>{{ form.description.label }} <br> {{ form.description(size=30) }}</p>
+                <p>{{ form.available.label }} <br> {{ form.available() }}</p>
+                <p><input class="btn-1" type="submit" value="Add"></p>
+            </form>
+        </div>
+    </div>
+{% endblock %}
