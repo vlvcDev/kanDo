@@ -1,57 +1,91 @@
 from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy
 from app import db
 from flask_login import UserMixin
 
+
+# Association table for many-to-many relationship between users and boards
+board_users = db.Table('board_users',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('board_id', db.Integer, db.ForeignKey('kanban_board.id'), primary_key=True),
+    db.Column('role', db.String(20), nullable=False)  # e.g., 'owner', 'collaborator', 'viewer'
+)
+
+# Association table for many-to-many relationship between users and tickets (assigned users)
+ticket_assignees = db.Table('ticket_assignees',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('ticket_id', db.Integer, db.ForeignKey('ticket.id'), primary_key=True)
+)
+
+# Association table for linking predecessor and successor tickets
+ticket_links = db.Table('ticket_links',
+    db.Column('predecessor_id', db.Integer, db.ForeignKey('ticket.id'), primary_key=True),
+    db.Column('successor_id', db.Integer, db.ForeignKey('ticket.id'), primary_key=True)
+)
+
 class User(db.Model, UserMixin):
-    __tablename__ = 'users'
-    id = db.Column(db.String, primary_key=True)
-    email = db.Column(db.String, nullable=False)
-    password = db.Column(db.LargeBinary, nullable=False)
-    creation_date = db.Column(db.Date, nullable=False, default=datetime.utcnow())
-    orders = db.relationship("Order", backref='user_ref', lazy=True)
-    user_type = db.Column(db.String)
-    __mapper_args__ = {
-        'polymorphic_identity': 'user',  # Discriminator value for User instances
-        'polymorphic_on': user_type  # Specifying which column to use for discrimination
-    }
-
-class Reseller(User):
-    __tablename__ = 'resellers'
-    company = db.Column(db.String)
-    address = db.Column(db.String)
-    phone = db.Column(db.String)
-    website = db.Column(db.String)
-    __mapper_args__ = {
-        'polymorphic_identity': 'reseller'  # Discriminator value for Admin instances
-    }
-class Admin(User):
-    __tablename__ = 'admins'
-    name = db.Column(db.String)
-    title = db.Column(db.String)
-    __mapper_args__ = {
-        'polymorphic_identity': 'admin'  # Discriminator value for Admin instances
-    }
-class Item(db.Model):
-    __tablename__ = 'items'
     id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.String, db.ForeignKey('orders.id'), nullable=False)
-    sequential_number = db.Column(db.Integer)
-    product_code = db.Column(db.String, nullable=False)
-    quantity = db.Column(db.Integer, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
 
-class Product(db.Model): # product is to display in the catalog, and turns into an item when ordered
-    code = db.Column(db.String, nullable=False, primary_key=True)
-    description = db.Column(db.String)
-    type = db.Column(db.String)
-    available = db.Column(db.Boolean)
-    price = db.Column(db.Float) # remember, Float is like a double
+    # Relationships
+    boards = db.relationship('KanbanBoard', secondary=board_users, back_populates='users')
+    tickets_created = db.relationship('Ticket', backref='creator', lazy=True, foreign_keys='Ticket.created_by')
+    tickets_completed = db.relationship('Ticket', backref='completer', lazy=True, foreign_keys='Ticket.completed_by')
+    notifications = db.relationship('Notification', backref='user', lazy=True)
+    activities = db.relationship('ActivityLog', backref='user', lazy=True)
 
-class Order(db.Model):
-    __tablename__ = 'orders'
-    id = db.Column(db.String, primary_key=True)
-    user_id = db.Column(db.String, db.ForeignKey('users.id'), nullable=False)
-    creation_date = db.Column(db.Date, default=datetime.utcnow())
-    items = db.relationship('Item', backref='order', lazy=True) # I'm not sure about this one
-    status = db.Column(db.String, default='new') # new, accepted, delivered, completed
-    user = db.relationship('User', backref='orders_ref', lazy=True)
+class KanbanBoard(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)  # For soft deletion
 
+    # Relationships
+    users = db.relationship('User', secondary=board_users, back_populates='boards')
+    sections = db.relationship('Section', backref='board', lazy=True, cascade="all, delete-orphan")
+    activities = db.relationship('ActivityLog', backref='board', lazy=True, cascade="all, delete-orphan")
+
+class Section(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    board_id = db.Column(db.Integer, db.ForeignKey('kanban_board.id'), nullable=False)
+
+    # Relationships
+    tickets = db.relationship('Ticket', backref='section', lazy=True, cascade="all, delete-orphan")
+
+class Ticket(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    github_issue_link = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True)  # For soft deletion
+
+    # Foreign keys
+    section_id = db.Column(db.Integer, db.ForeignKey('section.id'), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    completed_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    # Relationships
+    assignees = db.relationship('User', secondary=ticket_assignees, backref='assigned_tickets', lazy=True)
+    predecessors = db.relationship('Ticket', secondary=ticket_links,
+                                   primaryjoin=id==ticket_links.c.successor_id,
+                                   secondaryjoin=id==ticket_links.c.predecessor_id,
+                                   backref='successors')
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    message = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_read = db.Column(db.Boolean, default=False)
+
+class ActivityLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    board_id = db.Column(db.Integer, db.ForeignKey('kanban_board.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    action = db.Column(db.String(255), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
